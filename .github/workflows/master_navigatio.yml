@@ -1,8 +1,3 @@
-# Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
-# More GitHub Actions for Azure: https://github.com/Azure/actions
-
-name: Build and deploy Node.js app to Azure Web App - Navigatio 
-
 on:
   push:
     branches: [ main, master ]
@@ -17,11 +12,12 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     
-    - name: Use Node.js 20.18.0 for frontend
+    - name: Setup Node.js for frontend
       uses: actions/setup-node@v3
       with:
         node-version: '22.x'
         cache: 'npm'
+        cache-dependency-path: frontend/package-lock.json
     
     - name: Cache frontend node modules
       uses: actions/cache@v3
@@ -66,11 +62,12 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     
-    - name: Use Node.js 20.18.0 for backend
+    - name: Setup Node.js for backend
       uses: actions/setup-node@v3
       with:
-        node-version: '20.18.0'
+        node-version: '22.x'
         cache: 'npm'
+        cache-dependency-path: backend/package-lock.json
     
     - name: Cache backend node modules
       uses: actions/cache@v3
