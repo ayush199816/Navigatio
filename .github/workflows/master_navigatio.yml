@@ -1,7 +1,7 @@
 # Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
 # More GitHub Actions for Azure: https://github.com/Azure/actions
 
-name: Build and deploy Node.js app to Azure Web App - Navigatio
+name: Build and deploy Node.js app to Azure Web App - Navigatio 
 
 on:
   push:
@@ -10,63 +10,67 @@ on:
     branches: [ main, master ]
 
 jobs:
-  test-and-build:
+  frontend:
+    name: Frontend
     runs-on: ubuntu-latest
-    
-    strategy:
-      matrix:
-        node-version: [22.x]
     
     steps:
     - uses: actions/checkout@v3
     
-    - name: Use Node.js ${{ matrix.node-version }}
+    - name: Use Node.js 20.18.0
       uses: actions/setup-node@v3
       with:
-        node-version: ${{ matrix.node-version }}
+        node-version: '20.18.0'
         cache: 'npm'
     
-    # Install frontend dependencies
     - name: Install frontend dependencies
       working-directory: ./frontend
       run: npm ci
     
-    # Run frontend tests
     - name: Run frontend tests
       working-directory: ./frontend
       run: npm test -- --watchAll=false
     
-    # Build frontend
     - name: Build frontend
       working-directory: ./frontend
       run: npm run build
+
+  backend:
+    name: Backend
+    runs-on: ubuntu-latest
     
-    # Install backend dependencies
+    services:
+      mongodb:
+        image: mongo:6.0
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --eval 'db.runCommand({ ping: 1 })' localhost:27017/test --quiet"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Use Node.js 20.18.0
+      uses: actions/setup-node@v3
+      with:
+        node-version: '20.18.0'
+        cache: 'npm'
+    
     - name: Install backend dependencies
       working-directory: ./backend
       run: npm ci
-      
-    # Add environment variables for backend tests (update these as needed)
+    
     - name: Set up environment variables
+      working-directory: ./backend
       run: |
         echo "NODE_ENV=test" >> $GITHUB_ENV
         echo "MONGODB_URI=mongodb://localhost:27017/test" >> $GITHUB_ENV
         echo "JWT_SECRET=test-secret" >> $GITHUB_ENV
     
-    # Run backend tests (uncomment and configure when tests are added)
+    # Uncomment when you have backend tests
     # - name: Run backend tests
     #   working-directory: ./backend
     #   run: npm test
-    
-    # Optional: Deploy to production (uncomment and configure as needed)
-    # deploy:
-    #   needs: test-and-build
-    #   runs-on: ubuntu-latest
-    #   if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
-    #   steps:
-    #     - uses: actions/checkout@v3
-    #     - name: Deploy to production
-    #       run: |
-    #         # Add your deployment commands here
-    #         # For example, using SSH to connect to your server
-    #         # or using a deployment service like Vercel, Netlify, etc.
