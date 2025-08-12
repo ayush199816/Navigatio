@@ -36,9 +36,14 @@ jobs:
           npm install
         fi
     
-    - name: Run frontend tests
+    - name: Run frontend tests if they exist
       working-directory: ./frontend
-      run: npm test -- --watchAll=false
+      run: |
+        if [ -d "src/__tests__" ] || ls src/**/*.test.js* 1> /dev/null 2>&1; then
+          npm test -- --watchAll=false
+        else
+          echo "No test files found, skipping tests"
+        fi
     
     - name: Build frontend
       working-directory: ./frontend
