@@ -51,11 +51,21 @@ jobs:
         # Temporarily disable treating warnings as errors
         CI=false npm run build
     
+    - name: List build output (debug)
+      run: ls -R frontend/build
+      continue-on-error: true
+
+    - name: Create deployment package
+      run: |
+        mkdir -p deployment
+        cp -r frontend/build/* deployment/
+        ls -la deployment
+
     - name: Upload build output
       uses: actions/upload-artifact@v4
       with:
         name: frontend-build
-        path: frontend/build/
+        path: deployment/
         retention-days: 1
 
   deploy:
@@ -67,7 +77,11 @@ jobs:
       uses: actions/download-artifact@v4
       with:
         name: frontend-build
-        path: .
+        path: deployment
+
+    - name: List deployment files (debug)
+      run: ls -R deployment
+      continue-on-error: true
 
     - name: Login to Azure
       uses: azure/login@v2
@@ -80,7 +94,7 @@ jobs:
         app-name: ${{ secrets.AZURE_WEBAPP_NAME }}
         slot-name: 'production'
         publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
-        package: build/
+        package: deployment/
 
   backend:
     name: Backend
