@@ -124,20 +124,10 @@ jobs:
       uses: azure/login@v2
       with:
         creds: ${{ secrets.AZURE_CREDENTIALS }}
+        enable-AzPSSession: true
 
-    # Deploy frontend to wwwroot
-    - name: Deploy frontend to Azure Web App
-      uses: azure/webapps-deploy@v3
-      with:
-        app-name: ${{ secrets.AZURE_WEBAPP_NAME }}
-        slot-name: 'production'
-        publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
-        package: frontend-deploy/
-        target-path: /home/site/wwwroot
-        clean: true
-
-    # Deploy backend to wwwroot/api
-    - name: Deploy backend to Azure Web App
+    # Deploy frontend and backend using Azure CLI
+    - name: Deploy to Azure Web App
       uses: azure/CLI@v1
       with:
         azcliversion: 2.0.72
@@ -145,7 +135,18 @@ jobs:
           # Install webapp extension if not already installed
           az extension add --name webapp
           
-          # Deploy the backend files to the /api directory
+          # Deploy frontend to wwwroot
+          echo "Deploying frontend..."
+          az webapp deploy \
+            --name ${{ secrets.AZURE_WEBAPP_NAME }} \
+            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
+            --src-path frontend-deploy \
+            --target-path /home/site/wwwroot \
+            --type=zip \
+            --clean true
+          
+          # Deploy backend to wwwroot/api
+          echo "Deploying backend..."
           az webapp deploy \
             --name ${{ secrets.AZURE_WEBAPP_NAME }} \
             --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
@@ -155,7 +156,10 @@ jobs:
             --clean true
           
           # Restart the webapp to ensure changes take effect
+          echo "Restarting web app..."
           az webapp restart --name ${{ secrets.AZURE_WEBAPP_NAME }} --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }}
+          
+          echo "Deployment completed successfully!"
 
   backend:
     name: Backend
