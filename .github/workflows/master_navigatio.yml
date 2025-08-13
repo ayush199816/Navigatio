@@ -72,8 +72,9 @@ jobs:
         echo "Copying build files to deployment directory..."
         cp -r frontend/build/* deployment/
         
-        # Create web.config for Azure (if not exists)
-        echo '<?xml version="1.0"?>
+        # Create web.config for Azure
+        cat > deployment/web.config << 'EOL'
+<?xml version="1.0"?>
 <configuration>
   <system.webServer>
     <staticContent>
@@ -94,7 +95,8 @@ jobs:
       </rules>
     </rewrite>
   </system.webServer>
-</configuration>' > deployment/web.config
+</configuration>
+EOL
         
         # Create a test file
         echo "<!DOCTYPE html><html><body><h1>Test Deployment</h1><p>If you see this, the deployment worked but the React app might have issues.</p></body></html>" > deployment/test.html
