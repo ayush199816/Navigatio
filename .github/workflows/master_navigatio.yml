@@ -72,31 +72,8 @@ jobs:
         echo "Copying build files to deployment directory..."
         cp -r frontend/build/* deployment/
         
-        # Create web.config for Azure
-        cat > deployment/web.config << 'EOL'
-<?xml version="1.0"?>
-<configuration>
-  <system.webServer>
-    <staticContent>
-      <mimeMap fileExtension=".json" mimeType="application/json" />
-      <mimeMap fileExtension=".woff" mimeType="application/font-woff" />
-      <mimeMap fileExtension=".woff2" mimeType="application/font-woff" />
-    </staticContent>
-    <rewrite>
-      <rules>
-        <rule name="React Routes" stopProcessing="true">
-          <match url=".*" />
-          <conditions logicalGrouping="MatchAll">
-            <add input="{REQUEST_FILENAME}" matchType="IsFile" negate="true" />
-            <add input="{REQUEST_FILENAME}" matchType="IsDirectory" negate="true" />
-          </conditions>
-          <action type="Rewrite" url="/index.html" />
-        </rule>
-      </rules>
-    </rewrite>
-  </system.webServer>
-</configuration>
-EOL
+        # Create a minimal web.config for Azure
+        echo '<?xml version="1.0"?><configuration><system.webServer><staticContent><mimeMap fileExtension=".json" mimeType="application/json" /><mimeMap fileExtension=".woff" mimeType="application/font-woff" /><mimeMap fileExtension=".woff2" mimeType="application/font-woff" /></staticContent><rewrite><rules><rule name="React Routes" stopProcessing="true"><match url=".*" /><conditions logicalGrouping="MatchAll"><add input="{REQUEST_FILENAME}" matchType="IsFile" negate="true" /><add input="{REQUEST_FILENAME}" matchType="IsDirectory" negate="true" /></conditions><action type="Rewrite" url="/index.html" /></rule></rules></rewrite></system.webServer></configuration>' > deployment/web.config
         
         # Create a test file
         echo "<!DOCTYPE html><html><body><h1>Test Deployment</h1><p>If you see this, the deployment worked but the React app might have issues.</p></body></html>" > deployment/test.html
