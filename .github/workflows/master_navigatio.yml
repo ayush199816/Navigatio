@@ -126,8 +126,6 @@ jobs:
         target-path: /home/site/wwwroot
         # Clean the target directory before deployment
         clean: true
-        # Enable verbose logging
-        verbose: true
 
   backend:
     name: Backend
