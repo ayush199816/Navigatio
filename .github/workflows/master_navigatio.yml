@@ -126,7 +126,41 @@ jobs:
         creds: ${{ secrets.AZURE_CREDENTIALS }}
         enable-AzPSSession: true
 
-    # Deploy frontend and backend using Azure CLI
+    # Debug: List files before deployment
+    - name: List files before deployment
+      run: |
+        echo "Current directory:"
+        pwd
+        echo "\nFrontend files:"
+        ls -R frontend-deploy/ || echo "No frontend files found"
+        echo "\nBackend files:"
+        ls -R backend-deploy/ || echo "No backend files found"
+      continue-on-error: true
+
+    # Package frontend and backend into a single zip
+    - name: Create deployment package
+      run: |
+        # Create a temporary directory for the deployment package
+        mkdir -p deploy-package
+        
+        # Copy frontend files to wwwroot
+        mkdir -p deploy-package/site/wwwroot
+        cp -r frontend-deploy/* deploy-package/site/wwwroot/
+        
+        # Create api directory and copy backend files
+        mkdir -p deploy-package/site/wwwroot/api
+        cp -r backend-deploy/* deploy-package/site/wwwroot/api/
+        
+        # Create a zip of the entire package
+        cd deploy-package
+        zip -r ../deploy-package.zip .
+        cd ..
+        
+        # List the contents of the zip file for debugging
+        echo "Deployment package contents:"
+        unzip -l deploy-package.zip
+      
+    # Deploy the complete package
     - name: Deploy to Azure Web App
       uses: azure/CLI@v1
       with:
@@ -135,23 +169,12 @@ jobs:
           # Install webapp extension if not already installed
           az extension add --name webapp
           
-          # Deploy frontend to wwwroot
-          echo "Deploying frontend..."
+          # Deploy the complete package
+          echo "Deploying application..."
           az webapp deploy \
             --name ${{ secrets.AZURE_WEBAPP_NAME }} \
             --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
-            --src-path frontend-deploy \
-            --target-path /home/site/wwwroot \
-            --type=zip \
-            --clean true
-          
-          # Deploy backend to wwwroot/api
-          echo "Deploying backend..."
-          az webapp deploy \
-            --name ${{ secrets.AZURE_WEBAPP_NAME }} \
-            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
-            --src-path backend-deploy \
-            --target-path /home/site/wwwroot/api \
+            --src-path ../deploy-package.zip \
             --type=zip \
             --clean true
           
