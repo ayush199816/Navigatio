@@ -50,16 +50,56 @@ jobs:
       run: |
         # Temporarily disable treating warnings as errors
         CI=false npm run build
-    
-    - name: List build output (debug)
-      run: ls -R frontend/build
-      continue-on-error: true
+        
+        # Debug: List all files in build directory
+        echo "Build directory contents:"
+        ls -la frontend/build
+        echo "\nLooking for index.html:"
+        find frontend/build -name "index.html" -ls || echo "index.html not found!"
+        
+        # Create a test file to verify deployment
+        echo "<!DOCTYPE html><html><body><h1>Test Deployment</h1><p>If you see this, the deployment worked but the React app might have issues.</p></body></html>" > frontend/build/test.html
 
     - name: Create deployment package
       run: |
+        # Create deployment directory
         mkdir -p deployment
+        
+        # Copy build files
+        echo "Copying build files to deployment directory..."
         cp -r frontend/build/* deployment/
+        
+        # Create web.config for Azure (if not exists)
+        if [ ! -f deployment/web.config ]; then
+          echo '<?xml version="1.0"?>
+<configuration>
+  <system.webServer>
+    <staticContent>
+      <mimeMap fileExtension=".json" mimeType="application/json" />
+      <mimeMap fileExtension=".woff" mimeType="application/font-woff" />
+      <mimeMap fileExtension=".woff2" mimeType="application/font-woff" />
+    </staticContent>
+    <rewrite>
+      <rules>
+        <rule name="React Routes" stopProcessing="true">
+          <match url=".*" />
+          <conditions logicalGrouping="MatchAll">
+            <add input="{REQUEST_FILENAME}" matchType="IsFile" negate="true" />
+            <add input="{REQUEST_FILENAME}" matchType="IsDirectory" negate="true" />
+          </conditions>
+          <action type="Rewrite" url="/index.html" />
+        </rule>
+      </rules>
+    </rewrite>
+  </system.webServer>
+</configuration>' > deployment/web.config
+        fi
+        
+        # Verify deployment package
+        echo "Deployment package contents:"
         ls -la deployment
+        echo "\nLooking for index.html in deployment:"
+        find deployment -name "index.html" -ls || echo "ERROR: index.html not found in deployment package!"
 
     - name: Upload build output
       uses: actions/upload-artifact@v4
