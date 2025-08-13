@@ -249,8 +249,8 @@ const LandingPage = () => {
       );
     }
 
-    // Get current sightseeing experience
-    const currentExperience = destinations[currentSlide];
+    // Get current sightseeing experience with null checks
+    const currentExperience = destinations?.[currentSlide] || {};
     const experienceType = currentExperience?.type || 'Sightseeing';
     const experienceLocation = currentExperience?.location ? `in ${currentExperience.location}` : '';
 
@@ -258,7 +258,7 @@ const LandingPage = () => {
       <section className="relative h-screen overflow-hidden">
         {/* Background Carousel */}
         <div className="absolute inset-0">
-          {destinations.length > 0 ? (
+          {destinations?.length > 0 ? (
             <div className="relative w-full h-full">
               {destinations.map((experience, index) => (
                 <div 
@@ -502,7 +502,7 @@ const LandingPage = () => {
             <div className="w-20 h-1 bg-blue-600 mx-auto mt-4"></div>
           </div>
 
-          {destinations.length > 0 ? (
+          {destinations?.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
               {destinations.map((destination, index) => (
                 <motion.div
