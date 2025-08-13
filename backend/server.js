@@ -21,16 +21,24 @@ const allowedOrigins = [
   'http://localhost:5000'   // For local development
 ];
 
-// Enable CORS pre-flight
-app.options('*', cors());
+// Configure CORS
+const corsOptions = {
+  origin: function (origin, callback) {
+    // In development, allow all origins
+    if (process.env.NODE_ENV !== 'production') {
+      return callback(null, true);
+    }
 
-app.use(cors({
-  origin: function(origin, callback) {
     // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
     
-    // Allow all subdomains of azurewebsites.net
-    if (origin.endsWith('.azurewebsites.net')) {
+    // Allow all subdomains of azurewebsites.net and custom domain
+    if (
+      origin.endsWith('.azurewebsites.net') || 
+      origin.endsWith('navigatioasia.com') ||
+      origin === 'https://navigatio-b6a2ebbvfygxazeq.centralindia-01.azurewebsites.net' ||
+      origin === 'https://navigatio-b6a2ebbvfygxazeq.scm.azurewebsites.net'
+    ) {
       return callback(null, true);
     }
     
@@ -41,10 +49,30 @@ app.use(cors({
     }
     return callback(null, true);
   },
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-  credentials: true
-}));
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin', 'Access-Control-Allow-Origin'],
+  exposedHeaders: ['Content-Length', 'Content-Type', 'Authorization'],
+  credentials: true,
+  maxAge: 86400, // 24 hours
+  preflightContinue: false,
+  optionsSuccessStatus: 204
+};
+
+// Enable CORS pre-flight
+app.options('*', cors(corsOptions));
+app.use(cors(corsOptions));
+
+// Add CORS headers to all responses
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (corsOptions.origin(origin, () => {})) {
+    res.header('Access-Control-Allow-Origin', origin);
+    res.header('Access-Control-Allow-Credentials', 'true');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  }
+  next();
+});
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
