@@ -71,7 +71,8 @@ jobs:
         
         # Create web.config for Azure (if not exists)
         if [ ! -f deployment/web.config ]; then
-          echo '<?xml version="1.0"?>
+          cat > deployment/web.config << 'EOL'
+<?xml version="1.0"?>
 <configuration>
   <system.webServer>
     <staticContent>
@@ -92,7 +93,8 @@ jobs:
       </rules>
     </rewrite>
   </system.webServer>
-</configuration>' > deployment/web.config
+</configuration>
+EOL
         fi
         
         # Verify deployment package
