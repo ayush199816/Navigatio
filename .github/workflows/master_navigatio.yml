@@ -48,17 +48,20 @@ jobs:
     - name: Build frontend
       working-directory: ./frontend
       run: |
-        # Temporarily disable treating warnings as errors
+        # Install dependencies
+        npm ci
+        
+        # Build the React app
         CI=false npm run build
         
         # Debug: List all files in build directory
         echo "Build directory contents:"
-        ls -la frontend/build
+        ls -la build/
         echo "\nLooking for index.html:"
-        find frontend/build -name "index.html" -ls || echo "index.html not found!"
+        find build/ -name "index.html" -ls || echo "index.html not found!"
         
         # Create a test file to verify deployment
-        echo "<!DOCTYPE html><html><body><h1>Test Deployment</h1><p>If you see this, the deployment worked but the React app might have issues.</p></body></html>" > frontend/build/test.html
+        echo "<!DOCTYPE html><html><body><h1>Test Deployment</h1><p>If you see this, the deployment worked but the React app might have issues.</p></body></html>" > build/test.html
 
     - name: Create deployment package
       run: |
