@@ -215,13 +215,13 @@ const LandingPage = () => {
 
   // Auto-rotate carousel when there are destinations
   useEffect(() => {
-    if (destinations.length === 0) return;
+    if (!destinations || destinations.length === 0) return;
     
     const timer = setInterval(() => {
       setCurrentSlide((prev) => (prev === destinations.length - 1 ? 0 : prev + 1));
     }, 5000);
     return () => clearInterval(timer);
-  }, [destinations.length]);
+  }, [destinations]); // Removed .length to avoid dependency issues
 
   // Handle newsletter subscription
   const handleSubscribe = (e) => {
