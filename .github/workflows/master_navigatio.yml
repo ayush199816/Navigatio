@@ -100,69 +100,52 @@ jobs:
     runs-on: ubuntu-latest
     environment: 'production'
     steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Fetch all history for all branches and tags
+        
     - name: Download frontend build
       uses: actions/download-artifact@v4
       with:
         name: frontend-build
-        path: frontend-deploy
+        path: frontend/build
 
     - name: Download backend package
       uses: actions/download-artifact@v4
       with:
         name: backend-package
-        path: backend-deploy
+        path: backend
 
-    - name: List deployment files (debug)
+    - name: Verify file structure
       run: |
-        echo "Frontend files:"
-        ls -R frontend-deploy/ || echo "No frontend files found"
+        echo "Current directory:"
+        pwd
+        echo "\nRepository contents:"
+        ls -la
+        echo "\nFrontend build files:"
+        ls -la frontend/build/ || echo "Frontend build not found"
         echo "\nBackend files:"
-        ls -R backend-deploy/ || echo "No backend files found"
-      continue-on-error: true
+        ls -la backend/ || echo "Backend files not found"
 
     - name: Login to Azure
       uses: azure/login@v2
       with:
         creds: ${{ secrets.AZURE_CREDENTIALS }}
-        enable-AzPSSession: true
 
-    # Debug: List files before deployment
-    - name: List files before deployment
-      run: |
-        echo "Current directory:"
-        pwd
-        echo "\nFrontend files:"
-        ls -R frontend-deploy/ || echo "No frontend files found"
-        echo "\nBackend files:"
-        ls -R backend-deploy/ || echo "No backend files found"
-      continue-on-error: true
-
-    # Build frontend
-    - name: Build Frontend
-      working-directory: ./frontend
-      run: |
-        echo "Installing frontend dependencies..."
-        npm install
-        
-        echo "Building frontend..."
-        npm run build
-        
-        # Verify build output
-        echo "Build output:"
-        ls -la build/
-    
-    # Package frontend and backend
+    # Create deployment package
     - name: Create deployment package
       run: |
         echo "Creating deployment package..."
-        # Create a directory structure that matches Azure's expected layout
+        
+        # Create directory structure
         mkdir -p deploy-package/site/wwwroot
         
-        # Copy built frontend files to wwwroot
-        echo "Copying frontend build files..."
+        # Copy frontend build files
+        echo "Copying frontend files..."
         cp -r frontend/build/* deploy-package/site/wwwroot/
         
-        # Create api directory and copy backend files
+        # Create API directory and copy backend files
         echo "Copying backend files..."
         mkdir -p deploy-package/site/wwwroot/api
         cp -r backend/* deploy-package/site/wwwroot/api/
@@ -170,11 +153,10 @@ jobs:
         # Create the zip file
         cd deploy-package
         zip -r ../deploy-package.zip .
-        cd ..
         
-        # List the contents of the zip file for debugging
-        echo "Deployment package contents:"
-        unzip -l deploy-package.zip
+        # Verify the package
+        echo "\nDeployment package contents:"
+        find . -type f | sort
     
     # Deploy using Azure WebApp deployment action
     - name: Deploy to Azure Web App
