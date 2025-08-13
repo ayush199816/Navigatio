@@ -2,7 +2,7 @@ import axios from 'axios';
 
 // Create an axios instance with the backend API URL
 const api = axios.create({
-  baseURL: 'http://20.192.170.8:5000/api',
+  baseURL: 'http://navigatioasia.com/api',
   headers: {
     'Content-Type': 'application/json'
   }
