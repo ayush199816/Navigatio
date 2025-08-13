@@ -141,6 +141,13 @@ jobs:
         # Create directory structure
         mkdir -p deploy-package/site/wwwroot
         
+        # Verify frontend build files exist
+        echo "Verifying frontend build files..."
+        if [ ! -d "frontend/build" ]; then
+          echo "ERROR: Frontend build directory not found!"
+          exit 1
+        fi
+        
         # Copy frontend build files
         echo "Copying frontend files..."
         cp -r frontend/build/* deploy-package/site/wwwroot/
@@ -150,6 +157,63 @@ jobs:
         mkdir -p deploy-package/site/wwwroot/api
         cp -r backend/* deploy-package/site/wwwroot/api/
         
+        # Create web.config for Azure
+        echo '<?xml version="1.0" encoding="utf-8"?>
+<configuration>
+  <system.webServer>
+    <handlers>
+      <add name="iisnode" path="api/server.js" verb="*" modules="iisnode" />
+    </handlers>
+    <rewrite>
+      <rules>
+        <!-- Don't interfere with requests for node-inspector debugging -->
+        <rule name="NodeInspector" patternSyntax="ECMAScript" stopProcessing="true">
+          <match url="^api/server.js\/debug[\/]?" />
+        </rule>
+
+        <!-- First we consider whether the incoming URL matches a physical file in the /public folder -->
+        <rule name="StaticContent">
+          <action type="Rewrite" url="public{REQUEST_URI}"/>
+        </rule>
+
+        <!-- All other URLs are mapped to the Node.js application entry point -->
+        <rule name="DynamicContent">
+          <conditions>
+            <add input="{REQUEST_FILENAME}" matchType="IsFile" negate="True"/>
+          </conditions>
+          <action type="Rewrite" url="api/server.js"/>
+        </rule>
+      </rules>
+    </rewrite>
+    
+    <!-- 'bin' directory has no special meaning in node.js and apps can be configured to use it for runtime data etc -->
+    <security>
+      <requestFiltering>
+        <hiddenSegments>
+          <remove segment="bin"/>
+        </hiddenSegments>
+      </requestFiltering>
+    </security>
+
+    <!-- Make sure error responses are left untouched -->
+    <httpErrors existingResponse="PassThrough" />
+
+    <!-- Option 1: Redirect to HTTPS if not localhost -->
+    <rewrite>
+      <rules>
+        <rule name="Force HTTPS" enabled="true">
+          <match url="(.*)" ignoreCase="false" />
+          <conditions>
+            <add input="{HTTPS}" pattern="off" />
+            <add input="{HTTP_HOST}" pattern="localhost" negate="true" />
+          </conditions>
+          <action type="Redirect" url="https://{HTTP_HOST}/{R:1}" appendQueryString="true" redirectType="Permanent" />
+        </rule>
+      </rules>
+    </rewrite>
+  </system.webServer>
+</configuration>' > deploy-package/site/wwwroot/web.config
+        
         # Create the zip file
         cd deploy-package
         zip -r ../deploy-package.zip .
@@ -157,6 +221,10 @@ jobs:
         # Verify the package
         echo "\nDeployment package contents:"
         find . -type f | sort
+        
+        # Show directory structure for debugging
+        echo "\nDirectory structure:"
+        find . -type d | sort
     
     # Deploy using Azure WebApp deployment action
     - name: Deploy to Azure Web App

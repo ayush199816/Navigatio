@@ -125,34 +125,56 @@ routes.forEach(({ path, route }) => {
   console.log(`Registered route: ${path}`);
 });
 
-// Serve static files from the React app in production
-if (process.env.NODE_ENV === 'production') {
-  // Set static folder
-  app.use(express.static(path.join(__dirname, '../frontend/build')));
+// Serve static files from the React app
+const staticPath = path.join(__dirname, '../../site/wwwroot');
+const indexPath = path.join(staticPath, 'index.html');
+
+console.log('Static files path:', staticPath);
+console.log('Index file path:', indexPath);
+
+// Check if static files exist
+const staticFilesExist = fs.existsSync(indexPath);
+console.log('Static files exist:', staticFilesExist);
+
+// Serve static files
+if (staticFilesExist) {
+  console.log('Serving static files from:', staticPath);
+  app.use(express.static(staticPath));
   
-  // Handle React routing, return all requests to React app
+  // Handle React routing, return all non-API requests to React app
   app.get('*', (req, res) => {
-    res.sendFile(path.resolve(__dirname, '../frontend/build', 'index.html'));
+    console.log('Handling route:', req.path);
+    if (!req.path.startsWith('/api/')) {
+      console.log('Serving index.html for:', req.path);
+      res.sendFile(indexPath);
+    } else {
+      res.status(404).json({
+        success: false,
+        error: 'API endpoint not found'
+      });
+    }
   });
 } else {
-  // In development, just provide API status
-  app.get('/', (req, res) => {
-    res.send('Navigatio API is running in development mode...');
-  });
-  
-  // 404 handler for API routes
-  app.use('/api/*', (req, res) => {
-    res.status(404).json({
-      success: false,
-      error: 'API endpoint not found'
-    });
-  });
-  
-  // For all other routes in development, redirect to the React dev server
+  console.log('Static files not found in:', staticPath);
+  // Fallback response if static files are not found
   app.get('*', (req, res) => {
-    res.redirect(`http://navigatioasia.com${req.url}`);
+    res.send(`
+      <h1>Static files not found</h1>
+      <p>Expected to find files in: ${staticPath}</p>
+      <p>Current working directory: ${process.cwd()}</p>
+      <p>Directory contents:</p>
+      <pre>${fs.readdirSync(path.dirname(staticPath)).join('\n')}</pre>
+    `);
   });
 }
+
+// API routes should be defined before the catch-all route
+app.use('/api/*', (req, res) => {
+  res.status(404).json({
+    success: false,
+    error: 'API endpoint not found'
+  });
+});
 
 // Error handling middleware
 app.use((err, req, res, next) => {
