@@ -53,9 +53,19 @@ jobs:
     - name: Prepare backend files
       run: |
         mkdir -p deploy/api
+        # Copy all backend files
         cp -r backend/* deploy/api/
+        # Copy web.config to api directory
+        cp backend/web.config deploy/api/
+        # Ensure server.js is in the root of the api directory
+        mv deploy/api/server.js deploy/api/server.js
         # Remove devDependencies from package.json
         jq 'del(.devDependencies)' backend/package.json > deploy/api/package.json
+        # Add start script to package.json if not exists
+        if ! jq -e '.scripts.start' deploy/api/package.json > /dev/null; then
+          jq '.scripts += { "start": "node server.js" }' deploy/api/package.json > deploy/api/package.tmp.json && \
+          mv deploy/api/package.tmp.json deploy/api/package.json
+        fi
 
     # Create web.config for Azure
     - name: Create web.config
