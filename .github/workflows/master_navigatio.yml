@@ -158,61 +158,50 @@ jobs:
         cp -r backend/* deploy-package/site/wwwroot/api/
         
         # Create web.config for Azure
-        echo '<?xml version="1.0" encoding="utf-8"?>
-<configuration>
-  <system.webServer>
-    <handlers>
-      <add name="iisnode" path="api/server.js" verb="*" modules="iisnode" />
-    </handlers>
-    <rewrite>
-      <rules>
-        <!-- Don't interfere with requests for node-inspector debugging -->
-        <rule name="NodeInspector" patternSyntax="ECMAScript" stopProcessing="true">
-          <match url="^api/server.js\/debug[\/]?" />
-        </rule>
-
-        <!-- First we consider whether the incoming URL matches a physical file in the /public folder -->
-        <rule name="StaticContent">
-          <action type="Rewrite" url="public{REQUEST_URI}"/>
-        </rule>
-
-        <!-- All other URLs are mapped to the Node.js application entry point -->
-        <rule name="DynamicContent">
-          <conditions>
-            <add input="{REQUEST_FILENAME}" matchType="IsFile" negate="True"/>
-          </conditions>
-          <action type="Rewrite" url="api/server.js"/>
-        </rule>
-      </rules>
-    </rewrite>
-    
-    <!-- 'bin' directory has no special meaning in node.js and apps can be configured to use it for runtime data etc -->
-    <security>
-      <requestFiltering>
-        <hiddenSegments>
-          <remove segment="bin"/>
-        </hiddenSegments>
-      </requestFiltering>
-    </security>
-
-    <!-- Make sure error responses are left untouched -->
-    <httpErrors existingResponse="PassThrough" />
-
-    <!-- Option 1: Redirect to HTTPS if not localhost -->
-    <rewrite>
-      <rules>
-        <rule name="Force HTTPS" enabled="true">
-          <match url="(.*)" ignoreCase="false" />
-          <conditions>
-            <add input="{HTTPS}" pattern="off" />
-            <add input="{HTTP_HOST}" pattern="localhost" negate="true" />
-          </conditions>
-          <action type="Redirect" url="https://{HTTP_HOST}/{R:1}" appendQueryString="true" redirectType="Permanent" />
-        </rule>
-      </rules>
-    </rewrite>
-  </system.webServer>
-</configuration>' > deploy-package/site/wwwroot/web.config
+        echo '<?xml version="1.0" encoding="utf-8"?>' > deploy-package/site/wwwroot/web.config
+        echo '<configuration>' >> deploy-package/site/wwwroot/web.config
+        echo '  <system.webServer>' >> deploy-package/site/wwwroot/web.config
+        echo '    <handlers>' >> deploy-package/site/wwwroot/web.config
+        echo '      <add name="iisnode" path="api/server.js" verb="*" modules="iisnode" />' >> deploy-package/site/wwwroot/web.config
+        echo '    </handlers>' >> deploy-package/site/wwwroot/web.config
+        echo '    <rewrite>' >> deploy-package/site/wwwroot/web.config
+        echo '      <rules>' >> deploy-package/site/wwwroot/web.config
+        echo '        <rule name="NodeInspector" patternSyntax="ECMAScript" stopProcessing="true">' >> deploy-package/site/wwwroot/web.config
+        echo '          <match url="^api/server.js\\/debug[\\/]?" />' >> deploy-package/site/wwwroot/web.config
+        echo '        </rule>' >> deploy-package/site/wwwroot/web.config
+        echo '        <rule name="StaticContent">' >> deploy-package/site/wwwroot/web.config
+        echo '          <action type="Rewrite" url="public{REQUEST_URI}"/>' >> deploy-package/site/wwwroot/web.config
+        echo '        </rule>' >> deploy-package/site/wwwroot/web.config
+        echo '        <rule name="DynamicContent">' >> deploy-package/site/wwwroot/web.config
+        echo '          <conditions>' >> deploy-package/site/wwwroot/web.config
+        echo '            <add input="{REQUEST_FILENAME}" matchType="IsFile" negate="True"/>' >> deploy-package/site/wwwroot/web.config
+        echo '          </conditions>' >> deploy-package/site/wwwroot/web.config
+        echo '          <action type="Rewrite" url="api/server.js"/>' >> deploy-package/site/wwwroot/web.config
+        echo '        </rule>' >> deploy-package/site/wwwroot/web.config
+        echo '      </rules>' >> deploy-package/site/wwwroot/web.config
+        echo '    </rewrite>' >> deploy-package/site/wwwroot/web.config
+        echo '    <security>' >> deploy-package/site/wwwroot/web.config
+        echo '      <requestFiltering>' >> deploy-package/site/wwwroot/web.config
+        echo '        <hiddenSegments>' >> deploy-package/site/wwwroot/web.config
+        echo '          <remove segment="bin"/>' >> deploy-package/site/wwwroot/web.config
+        echo '        </hiddenSegments>' >> deploy-package/site/wwwroot/web.config
+        echo '      </requestFiltering>' >> deploy-package/site/wwwroot/web.config
+        echo '    </security>' >> deploy-package/site/wwwroot/web.config
+        echo '    <httpErrors existingResponse="PassThrough" />' >> deploy-package/site/wwwroot/web.config
+        echo '    <rewrite>' >> deploy-package/site/wwwroot/web.config
+        echo '      <rules>' >> deploy-package/site/wwwroot/web.config
+        echo '        <rule name="Force HTTPS" enabled="true">' >> deploy-package/site/wwwroot/web.config
+        echo '          <match url="(.*)" ignoreCase="false" />' >> deploy-package/site/wwwroot/web.config
+        echo '          <conditions>' >> deploy-package/site/wwwroot/web.config
+        echo '            <add input="{HTTPS}" pattern="off" />' >> deploy-package/site/wwwroot/web.config
+        echo '            <add input="{HTTP_HOST}" pattern="localhost" negate="true" />' >> deploy-package/site/wwwroot/web.config
+        echo '          </conditions>' >> deploy-package/site/wwwroot/web.config
+        echo '          <action type="Redirect" url="https://{HTTP_HOST}/{R:1}" appendQueryString="true" redirectType="Permanent" />' >> deploy-package/site/wwwroot/web.config
+        echo '        </rule>' >> deploy-package/site/wwwroot/web.config
+        echo '      </rules>' >> deploy-package/site/wwwroot/web.config
+        echo '    </rewrite>' >> deploy-package/site/wwwroot/web.config
+        echo '  </system.webServer>' >> deploy-package/site/wwwroot/web.config
+        echo '</configuration>' >> deploy-package/site/wwwroot/web.config
         
         # Create the zip file
         cd deploy-package
