@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // Set default base URL for all axios requests
-axios.defaults.baseURL = 'http://navigatioasia.com';
+axios.defaults.baseURL = 'https://navigatioasia.com';
 
 // Add a request interceptor to include the auth token
 axios.interceptors.request.use(
