@@ -125,18 +125,34 @@ routes.forEach(({ path, route }) => {
   console.log(`Registered route: ${path}`);
 });
 
-// Root route
-app.get('/', (req, res) => {
-  res.send('Navigatio API is running...');
-});
-
-// 404 handler
-app.use((req, res) => {
-  res.status(404).json({
-    success: false,
-    error: 'Route not found'
+// Serve static files from the React app in production
+if (process.env.NODE_ENV === 'production') {
+  // Set static folder
+  app.use(express.static(path.join(__dirname, '../frontend/build')));
+  
+  // Handle React routing, return all requests to React app
+  app.get('*', (req, res) => {
+    res.sendFile(path.resolve(__dirname, '../frontend/build', 'index.html'));
   });
-});
+} else {
+  // In development, just provide API status
+  app.get('/', (req, res) => {
+    res.send('Navigatio API is running in development mode...');
+  });
+  
+  // 404 handler for API routes
+  app.use('/api/*', (req, res) => {
+    res.status(404).json({
+      success: false,
+      error: 'API endpoint not found'
+    });
+  });
+  
+  // For all other routes in development, redirect to the React dev server
+  app.get('*', (req, res) => {
+    res.redirect(`http://navigatioasia.com${req.url}`);
+  });
+}
 
 // Error handling middleware
 app.use((err, req, res, next) => {

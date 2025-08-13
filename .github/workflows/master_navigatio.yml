@@ -137,6 +137,20 @@ jobs:
         ls -R backend-deploy/ || echo "No backend files found"
       continue-on-error: true
 
+    # Build frontend
+    - name: Build Frontend
+      working-directory: ./frontend
+      run: |
+        echo "Installing frontend dependencies..."
+        npm install
+        
+        echo "Building frontend..."
+        npm run build
+        
+        # Verify build output
+        echo "Build output:"
+        ls -la build/
+    
     # Package frontend and backend
     - name: Create deployment package
       run: |
@@ -144,14 +158,14 @@ jobs:
         # Create a directory structure that matches Azure's expected layout
         mkdir -p deploy-package/site/wwwroot
         
-        # Copy frontend files to wwwroot
-        echo "Copying frontend files..."
-        cp -r frontend-deploy/* deploy-package/site/wwwroot/
+        # Copy built frontend files to wwwroot
+        echo "Copying frontend build files..."
+        cp -r frontend/build/* deploy-package/site/wwwroot/
         
         # Create api directory and copy backend files
         echo "Copying backend files..."
         mkdir -p deploy-package/site/wwwroot/api
-        cp -r backend-deploy/* deploy-package/site/wwwroot/api/
+        cp -r backend/* deploy-package/site/wwwroot/api/
         
         # Create the zip file
         cd deploy-package
