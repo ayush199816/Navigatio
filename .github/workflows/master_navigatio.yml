@@ -137,30 +137,7 @@ jobs:
         ls -R backend-deploy/ || echo "No backend files found"
       continue-on-error: true
 
-    # Package frontend and backend into a single zip
-    - name: Create deployment package
-      run: |
-        # Create a temporary directory for the deployment package
-        mkdir -p deploy-package
-        
-        # Copy frontend files to wwwroot
-        mkdir -p deploy-package/site/wwwroot
-        cp -r frontend-deploy/* deploy-package/site/wwwroot/
-        
-        # Create api directory and copy backend files
-        mkdir -p deploy-package/site/wwwroot/api
-        cp -r backend-deploy/* deploy-package/site/wwwroot/api/
-        
-        # Create a zip of the entire package
-        cd deploy-package
-        zip -r ../deploy-package.zip .
-        cd ..
-        
-        # List the contents of the zip file for debugging
-        echo "Deployment package contents:"
-        unzip -l deploy-package.zip
-      
-    # Deploy the complete package
+    # Package and deploy in a single step to avoid path issues
     - name: Deploy to Azure Web App
       uses: azure/CLI@v1
       with:
@@ -169,18 +146,41 @@ jobs:
           # Install webapp extension if not already installed
           az extension add --name webapp
           
+          # Create a temporary directory for the deployment package
+          mkdir -p /tmp/deploy-package/site/wwwroot
+          
+          # Copy frontend files to wwwroot
+          echo "Copying frontend files..."
+          cp -r frontend-deploy/* /tmp/deploy-package/site/wwwroot/
+          
+          # Create api directory and copy backend files
+          echo "Copying backend files..."
+          mkdir -p /tmp/deploy-package/site/wwwroot/api
+          cp -r backend-deploy/* /tmp/deploy-package/site/wwwroot/api/
+          
+          # Verify the deployment package
+          echo "Verifying deployment package..."
+          find /tmp/deploy-package -type f | sort
+          
           # Deploy the complete package
           echo "Deploying application..."
+          cd /tmp/deploy-package
+          zip -r /tmp/deploy-package.zip .
+          
+          # Deploy using the zip file
           az webapp deploy \
             --name ${{ secrets.AZURE_WEBAPP_NAME }} \
             --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
-            --src-path ../deploy-package.zip \
+            --src-path /tmp/deploy-package.zip \
             --type=zip \
             --clean true
           
           # Restart the webapp to ensure changes take effect
           echo "Restarting web app..."
           az webapp restart --name ${{ secrets.AZURE_WEBAPP_NAME }} --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }}
+          
+          # Clean up
+          rm -rf /tmp/deploy-package /tmp/deploy-package.zip
           
           echo "Deployment completed successfully!"
 
