@@ -1,105 +1,193 @@
-name: Build and Deploy to Azure Web App
-
 on:
   push:
     branches: [ main, master ]
   pull_request:
     branches: [ main, master ]
 
-env:
-  AZURE_WEBAPP_NAME: Navigatio
-  AZURE_WEBAPP_PACKAGE_PATH: './deploy'
-  NODE_VERSION: '22.x'
-
 jobs:
-  build-and-deploy:
+  frontend:
+    name: Frontend
     runs-on: ubuntu-latest
-    environment: production
-
+    
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-
-    # Setup Node.js
-    - name: Set up Node.js
+    - uses: actions/checkout@v4
+    
+    - name: Setup Node.js for frontend
       uses: actions/setup-node@v4
       with:
-        node-version: ${{ env.NODE_VERSION }}
+        node-version: '22.x'
         cache: 'npm'
-
-    # Install jq for JSON processing
-    - name: Install jq
-      run: sudo apt-get update && sudo apt-get install -y jq
-
-    # Install frontend dependencies
+        cache-dependency-path: frontend/package-lock.json
+    
+    - name: Cache frontend node modules
+      uses: actions/cache@v4
+      with:
+        path: frontend/node_modules
+        key: ${{ runner.os }}-frontend-node-modules-${{ hashFiles('frontend/package-lock.json') }}
+    
     - name: Install frontend dependencies
       working-directory: ./frontend
-      run: npm ci
-
-    # Build frontend
+      run: |
+        if [ -f package-lock.json ]; then
+          npm ci
+        elif [ -f yarn.lock ]; then
+          yarn install --frozen-lockfile
+        else
+          npm install
+        fi
+    
+    - name: Run frontend tests if they exist
+      working-directory: ./frontend
+      run: |
+        if [ -d "src/__tests__" ] || ls src/**/*.test.js* 1> /dev/null 2>&1; then
+          npm test -- --watchAll=false
+        else
+          echo "No test files found, skipping tests"
+        fi
+    
     - name: Build frontend
       working-directory: ./frontend
       run: |
-        npm run build
-        mkdir -p ../deploy
-        mv build ../deploy/wwwroot
+        # Install dependencies
+        npm ci
+        
+        # Build the React app
+        CI=false npm run build
+        
+        # Debug: List all files in build directory
+        echo "Build directory contents:"
+        ls -la build/
+        echo "\nLooking for index.html:"
+        find build/ -name "index.html" -ls || echo "index.html not found!"
+        
+        # Create a test file to verify deployment
+        echo "<!DOCTYPE html><html><body><h1>Test Deployment</h1><p>If you see this, the deployment worked but the React app might have issues.</p></body></html>" > build/test.html
 
-    # Install backend dependencies
-    - name: Install backend dependencies
-      working-directory: ./backend
-      run: npm ci --production
-
-    # Copy backend files to deploy directory
-    - name: Prepare backend files
+    - name: Create deployment package
       run: |
-        mkdir -p deploy/api
-        # Copy all backend files
-        cp -r backend/* deploy/api/
-        # Copy web.config to api directory
-        cp backend/web.config deploy/api/
-        # Ensure server.js is in the root of the api directory
-        mv deploy/api/server.js deploy/api/server.js
-        # Remove devDependencies from package.json
-        jq 'del(.devDependencies)' backend/package.json > deploy/api/package.json
-        # Add start script to package.json if not exists
-        if ! jq -e '.scripts.start' deploy/api/package.json > /dev/null; then
-          jq '.scripts += { "start": "node server.js" }' deploy/api/package.json > deploy/api/package.tmp.json && \
-          mv deploy/api/package.tmp.json deploy/api/package.json
-        fi
+        # Create deployment directory
+        mkdir -p deployment
+        
+        # Copy build files
+        echo "Copying build files to deployment directory..."
+        cp -r frontend/build/* deployment/
+        
+        # Create a minimal web.config for Azure
+        echo '<?xml version="1.0"?><configuration><system.webServer><staticContent><mimeMap fileExtension=".json" mimeType="application/json" /><mimeMap fileExtension=".woff" mimeType="application/font-woff" /><mimeMap fileExtension=".woff2" mimeType="application/font-woff" /></staticContent><rewrite><rules><rule name="React Routes" stopProcessing="true"><match url=".*" /><conditions logicalGrouping="MatchAll"><add input="{REQUEST_FILENAME}" matchType="IsFile" negate="true" /><add input="{REQUEST_FILENAME}" matchType="IsDirectory" negate="true" /></conditions><action type="Rewrite" url="/index.html" /></rule></rules></rewrite></system.webServer></configuration>' > deployment/web.config
+        
+        # Create a test file
+        echo "<!DOCTYPE html><html><body><h1>Test Deployment</h1><p>If you see this, the deployment worked but the React app might have issues.</p></body></html>" > deployment/test.html
+        
+        # Verify deployment package
+        echo "Deployment package contents:"
+        ls -la deployment
+        echo "\nLooking for index.html in deployment:"
+        find deployment -name "index.html" -ls || echo "ERROR: index.html not found in deployment package!"
+        
+        # Create a zip of the deployment package for manual inspection
+        zip -r deployment.zip deployment/
+        ls -la deployment.zip
 
-    # Create web.config for Azure
-    - name: Create web.config
-      run: |
-        cat > deploy/wwwroot/web.config << 'EOF'
-        <?xml version="1.0" encoding="utf-8"?>
-        <configuration>
-          <system.webServer>
-            <rewrite>
-              <rules>
-                <rule name="StaticContent" stopProcessing="true">
-                  <action type="Rewrite" url="public{REQUEST_URI}" />
-                </rule>
-                <rule name="DynamicContent">
-                  <conditions>
-                    <add input="{REQUEST_FILENAME}" matchType="IsFile" negate="True" />
-                  </conditions>
-                  <action type="Rewrite" url="/index.html" />
-                </rule>
-              </rules>
-            </rewrite>
-            <handlers>
-              <add name="httpPlatformHandler" path="*" verb="*" modules="httpPlatformHandler" scriptProcessor="%DEFAULTBITS%\node.exe|%HOME%\site\wwwroot\api\server.js" resourceType="Unspecified" requireAccess="Script" />
-            </handlers>
-            <httpPlatform processPath="%HOME%\site\wwwroot\api\server.js" stdoutLogEnabled="true" stdoutLogFile="\\?\%HOME%\LogFiles\stdout.log" startupTimeLimit="60" />
-          </system.webServer>
-        </configuration>
-        EOF
+    - name: Upload build output
+      uses: actions/upload-artifact@v4
+      with:
+        name: frontend-build
+        path: deployment/
+        retention-days: 1
 
-    # Deploy to Azure
+  deploy:
+    needs: [frontend, backend]
+    runs-on: ubuntu-latest
+    environment: 'production'
+    steps:
+    - name: Download build output
+      uses: actions/download-artifact@v4
+      with:
+        name: frontend-build
+        path: deployment
+
+    - name: List deployment files (debug)
+      run: ls -R deployment
+      continue-on-error: true
+
+    - name: Login to Azure
+      uses: azure/login@v2
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+
     - name: Deploy to Azure Web App
       uses: azure/webapps-deploy@v3
       with:
-        app-name: ${{ env.AZURE_WEBAPP_NAME }}
+        app-name: ${{ secrets.AZURE_WEBAPP_NAME }}
+        slot-name: 'production'
         publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
-        package: ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}
-        enable-oryx-build: false
+        package: deployment/
+        # Ensure we're deploying to the root of the web app
+        target-path: /home/site/wwwroot
+        # Clean the target directory before deployment
+        clean: true
+
+  backend:
+    name: Backend
+    runs-on: ubuntu-latest
+    
+    services:
+      mongodb:
+        image: mongo:6.0
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --eval 'db.runCommand({ ping: 1 })' localhost:27017/test --quiet"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Node.js for backend
+      uses: actions/setup-node@v4
+      with:
+        node-version: '22.x'
+        cache: 'npm'
+        cache-dependency-path: backend/package-lock.json
+    
+    - name: Cache backend node modules
+      uses: actions/cache@v4
+      with:
+        path: backend/node_modules
+        key: ${{ runner.os }}-backend-node-modules-${{ hashFiles('backend/package-lock.json') }}
+    
+    - name: Install backend dependencies
+      working-directory: ./backend
+      run: |
+        if [ -f package-lock.json ]; then
+          npm ci
+        elif [ -f yarn.lock ]; then
+          yarn install --frozen-lockfile
+        else
+          npm install
+        fi
+    
+    - name: Set up environment variables
+      working-directory: ./backend
+      env:
+        PORT: 5000
+        MONGODB_URI: ${{ secrets.MONGODB_URI || 'mongodb+srv://ayush199816:jpODnVQiVDGs5Xv4@navigatio.9ure2jk.mongodb.net/' }}
+        JWT_SECRET: ${{ secrets.JWT_SECRET || 'your_jwt_secret_key_here' }}
+        JWT_EXPIRE: 30d
+        NODE_ENV: test
+        GOOGLE_AI_API_KEY: ${{ secrets.GOOGLE_AI_API_KEY }}
+      run: |
+        # Create .env file for local testing
+        echo "PORT=$PORT" > .env
+        echo "MONGODB_URI=$MONGODB_URI" >> .env
+        echo "JWT_SECRET=$JWT_SECRET" >> .env
+        echo "JWT_EXPIRE=$JWT_EXPIRE" >> .env
+        echo "NODE_ENV=$NODE_ENV" >> .env
+        echo "GOOGLE_AI_API_KEY=$GOOGLE_AI_API_KEY" >> .env
+    
+    # Uncomment when you have backend tests
+    # - name: Run backend tests
+    #   working-directory: ./backend
+    #   run: npm test
