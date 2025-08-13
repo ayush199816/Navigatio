@@ -1,0 +1,95 @@
+name: Build and Deploy to Azure Web App
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+env:
+  AZURE_WEBAPP_NAME: Navigatio
+  AZURE_WEBAPP_PACKAGE_PATH: './deploy'
+  NODE_VERSION: '22.x'
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    # Setup Node.js
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+
+    # Install jq for JSON processing
+    - name: Install jq
+      run: sudo apt-get update && sudo apt-get install -y jq
+
+    # Install frontend dependencies
+    - name: Install frontend dependencies
+      working-directory: ./frontend
+      run: npm ci
+
+    # Build frontend
+    - name: Build frontend
+      working-directory: ./frontend
+      run: |
+        npm run build
+        mkdir -p ../deploy
+        mv build ../deploy/wwwroot
+
+    # Install backend dependencies
+    - name: Install backend dependencies
+      working-directory: ./backend
+      run: npm ci --production
+
+    # Copy backend files to deploy directory
+    - name: Prepare backend files
+      run: |
+        mkdir -p deploy/api
+        cp -r backend/* deploy/api/
+        # Remove devDependencies from package.json
+        jq 'del(.devDependencies)' backend/package.json > deploy/api/package.json
+
+    # Create web.config for Azure
+    - name: Create web.config
+      run: |
+        cat > deploy/wwwroot/web.config << 'EOF'
+        <?xml version="1.0" encoding="utf-8"?>
+        <configuration>
+          <system.webServer>
+            <rewrite>
+              <rules>
+                <rule name="StaticContent" stopProcessing="true">
+                  <action type="Rewrite" url="public{REQUEST_URI}" />
+                </rule>
+                <rule name="DynamicContent">
+                  <conditions>
+                    <add input="{REQUEST_FILENAME}" matchType="IsFile" negate="True" />
+                  </conditions>
+                  <action type="Rewrite" url="/index.html" />
+                </rule>
+              </rules>
+            </rewrite>
+            <handlers>
+              <add name="httpPlatformHandler" path="*" verb="*" modules="httpPlatformHandler" scriptProcessor="%DEFAULTBITS%\node.exe|%HOME%\site\wwwroot\api\server.js" resourceType="Unspecified" requireAccess="Script" />
+            </handlers>
+            <httpPlatform processPath="%HOME%\site\wwwroot\api\server.js" stdoutLogEnabled="true" stdoutLogFile="\\?\%HOME%\LogFiles\stdout.log" startupTimeLimit="60" />
+          </system.webServer>
+        </configuration>
+        EOF
+
+    # Deploy to Azure
+    - name: Deploy to Azure Web App
+      uses: azure/webapps-deploy@v3
+      with:
+        app-name: ${{ env.AZURE_WEBAPP_NAME }}
+        publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+        package: ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}
+        enable-oryx-build: false
