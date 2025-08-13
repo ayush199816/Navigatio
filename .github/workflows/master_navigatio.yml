@@ -137,43 +137,48 @@ jobs:
         ls -R backend-deploy/ || echo "No backend files found"
       continue-on-error: true
 
-    # Deploy frontend and backend separately using newer Azure CLI
-    - name: Deploy Frontend
-      uses: azure/CLI@v2
-      with:
-        azcliversion: 2.53.1
-        inlineScript: |
-          echo "Deploying frontend..."
-          az webapp deployment source config-zip \
-            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
-            --name ${{ secrets.AZURE_WEBAPP_NAME }} \
-            --src frontend-deploy.zip \
-            --timeout 600
+    # Package frontend and backend
+    - name: Create deployment package
+      run: |
+        echo "Creating deployment package..."
+        # Create a directory structure that matches Azure's expected layout
+        mkdir -p deploy-package/site/wwwroot
+        
+        # Copy frontend files to wwwroot
+        echo "Copying frontend files..."
+        cp -r frontend-deploy/* deploy-package/site/wwwroot/
+        
+        # Create api directory and copy backend files
+        echo "Copying backend files..."
+        mkdir -p deploy-package/site/wwwroot/api
+        cp -r backend-deploy/* deploy-package/site/wwwroot/api/
+        
+        # Create the zip file
+        cd deploy-package
+        zip -r ../deploy-package.zip .
+        cd ..
+        
+        # List the contents of the zip file for debugging
+        echo "Deployment package contents:"
+        unzip -l deploy-package.zip
     
-    - name: Deploy Backend
-      uses: azure/CLI@v2
+    # Deploy using Azure WebApp deployment action
+    - name: Deploy to Azure Web App
+      uses: azure/webapps-deploy@v3
       with:
-        azcliversion: 2.53.1
+        app-name: ${{ secrets.AZURE_WEBAPP_NAME }}
+        slot-name: 'production'
+        publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+        package: ./deploy-package.zip
+        clean: true
+        
+    # Restart the web app
+    - name: Restart Web App
+      uses: azure/CLI@v1
+      with:
         inlineScript: |
-          echo "Preparing backend files..."
-          # Create a zip of the backend files
-          cd backend-deploy
-          zip -r ../backend-deploy.zip .
-          cd ..
-          
-          echo "Deploying backend..."
-          # Deploy backend to the /api directory
-          az webapp deployment source config-zip \
-            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
-            --name ${{ secrets.AZURE_WEBAPP_NAME }} \
-            --src backend-deploy.zip \
-            --timeout 600 \
-            --target-path /api
-          
-          echo "Restarting web app..."
           az webapp restart --name ${{ secrets.AZURE_WEBAPP_NAME }} --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }}
-          
-          echo "Deployment completed successfully!"
+          echo "Deployment and restart completed successfully!"
 
   backend:
     name: Backend
