@@ -86,10 +86,13 @@ jobs:
         echo "Deployment package contents:"
         ls -la deploy-package/
     
-    - name: Login to Azure
+    - name: Login to Azure with OIDC
       uses: azure/login@v2
       with:
-        creds: ${{ secrets.AZURE_CREDENTIALS }}
+        client-id: 8cd921d8-ec41-41bc-be30-e50447769908
+        tenant-id: 0b39938f-1439-4596-9e1c-f82b58ebd47e
+        subscription-id: 0b39938f-1439-4596-9e1c-f82b58ebd47e
+        enable-AzPSSession: true
     
     - name: Deploy Frontend to Azure Web App
       uses: azure/webapps-deploy@v3
@@ -218,10 +221,13 @@ jobs:
         path: backend-deploy
         retention-days: 1
     
-    - name: Login to Azure
+    - name: Login to Azure with OIDC
       uses: azure/login@v2
       with:
-        creds: ${{ secrets.AZURE_CREDENTIALS }}
+        client-id: 8cd921d8-ec41-41bc-be30-e50447769908
+        tenant-id: 0b39938f-1439-4596-9e1c-f82b58ebd47e
+        subscription-id: 0b39938f-1439-4596-9e1c-f82b58ebd47e
+        enable-AzPSSession: true
     
     - name: Deploy Backend to Azure Web App
       uses: azure/webapps-deploy@v3
