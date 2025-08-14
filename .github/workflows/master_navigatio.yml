@@ -1,4 +1,4 @@
-name: Deploy Frontend to Azure Static Web App
+name: Deploy Frontend to Azure Web App
 
 on:
   push:
@@ -48,7 +48,7 @@ jobs:
         # Create a test file to verify deployment
         echo "<!DOCTYPE html><html><body><h1>Test Deployment</h1><p>If you see this, the deployment worked but the React app might have issues.</p></body></html>" > build/test.html
         
-        # Create a proper web.config for Azure Static Web Apps
+        # Create a proper web.config for Azure Web Apps
         echo '<?xml version="1.0"?>
         <configuration>
           <system.webServer>
@@ -75,6 +75,14 @@ jobs:
         # Debug: List build directory contents
         echo "Build directory contents:"
         ls -la build/
+        
+        # Create deployment package
+        mkdir -p deploy-package/site/wwwroot
+        cp -r build/* deploy-package/site/wwwroot/
+        cp build/web.config deploy-package/site/
+        
+        echo "Deployment package created"
+        ls -la deploy-package/site/wwwroot
     
     - name: Login to Azure
       uses: azure/login@v2
@@ -82,12 +90,9 @@ jobs:
         creds: ${{ secrets.AZURE_CREDENTIALS }}
     
     - name: Deploy to Azure Web App
-      uses: azure/static-web-apps-deploy@v1
+      uses: azure/webapps-deploy@v3
       with:
-        azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
-        repo_token: ${{ secrets.GITHUB_TOKEN }}
-        action: 'upload'
-        app_location: 'frontend/build'
-        output_location: ''
-        skip_app_build: true
-        skip_api_build: true
+        app-name: ${{ secrets.AZURE_WEBAPP_NAME }}
+        slot-name: 'production'
+        publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+        package: deploy-package/site
