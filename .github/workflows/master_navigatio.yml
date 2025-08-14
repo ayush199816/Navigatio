@@ -89,6 +89,8 @@ jobs:
         # Debug: Show deployment package structure
         echo "Deployment package contents:"
         ls -la deploy-package/
+        echo "\nContents of deploy-package directory:"
+        find deploy-package -type f | sort
     
     - name: Login to Azure
       uses: azure/login@v2
