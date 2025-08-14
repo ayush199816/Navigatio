@@ -1,10 +1,11 @@
-name: Deploy Application to Azure
+name: Build and Deploy to Azure
+# Workflow for deploying Navigatio frontend and backend to Azure
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ master ]
   pull_request:
-    branches: [ main, master ]
+    branches: [ master ]
 
 jobs:
   frontend:
