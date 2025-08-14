@@ -101,9 +101,10 @@ jobs:
     - name: Deploy to Azure Web App - Frontend
       uses: azure/webapps-deploy@v3
       with:
-        app-name: navigatio-frontend
+        app-name: Navigatio-frontend
         package: ./deploy-package
         publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+        resource-group: Navigatio_group
 
   backend:
     name: Build and Deploy Backend
@@ -240,3 +241,4 @@ jobs:
         app-name: navigatio-backend
         package: ./backend-deploy
         publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+        resource-group: Navigatio_group
