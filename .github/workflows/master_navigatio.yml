@@ -1,4 +1,4 @@
-name: Deploy Frontend to Azure Web App
+name: Deploy Application to Azure
 
 on:
   push:
@@ -7,7 +7,10 @@ on:
     branches: [ main, master ]
 
 jobs:
-  build-and-deploy:
+  frontend:
+    name: Build and Deploy Frontend
+    runs-on: ubuntu-latest
+    environment: 'production'
     name: Build and Deploy
     runs-on: ubuntu-latest
     environment: 'production'
@@ -91,10 +94,141 @@ jobs:
       with:
         creds: ${{ secrets.AZURE_CREDENTIALS }}
     
-    - name: Deploy to Azure Web App
+    - name: Deploy Frontend to Azure Web App
       uses: azure/webapps-deploy@v3
       with:
-        app-name: ${{ secrets.AZURE_WEBAPP_NAME }}
+        app-name: ${{ secrets.AZURE_FRONTEND_APP_NAME }}
         slot-name: 'production'
         publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
         package: ./deploy-package
+
+  backend:
+    name: Build and Deploy Backend
+    needs: frontend
+    runs-on: ubuntu-latest
+    environment: 'production'
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20.x'
+        cache: 'npm'
+        cache-dependency-path: backend/package-lock.json
+    
+    - name: Cache node modules
+      uses: actions/cache@v4
+      with:
+        path: backend/node_modules
+        key: ${{ runner.os }}-backend-node-modules-${{ hashFiles('backend/package-lock.json') }}
+    
+    - name: Install backend dependencies
+      working-directory: ./backend
+      run: |
+        if [ -f package-lock.json ]; then
+          npm ci
+        elif [ -f yarn.lock ]; then
+          yarn install --frozen-lockfile
+        else
+          npm install
+        fi
+    
+    - name: Run backend tests
+      working-directory: ./backend
+      run: |
+        if [ -d "test" ] || [ -f "*.test.js" ] || [ -f "*.spec.js" ]; then
+          npm test
+        else
+          echo "No test files found, skipping tests"
+        fi
+    
+    - name: Create deployment package
+      working-directory: ./backend
+      run: |
+        # Create deployment directory
+        mkdir -p ../backend-deploy
+        
+        # Copy package files
+        cp package*.json ../backend-deploy/
+        
+        # Install production dependencies
+        npm ci --only=production
+        
+        # Copy source files
+        cp -r src/ ../backend-deploy/src/
+        cp -r config/ ../backend-deploy/config/ 2>/dev/null || :
+        cp -r middleware/ ../backend-deploy/middleware/ 2>/dev/null || :
+        cp -r models/ ../backend-deploy/models/ 2>/dev/null || :
+        cp -r controllers/ ../backend-deploy/controllers/ 2>/dev/null || :
+        cp -r utils/ ../backend-deploy/utils/ 2>/dev/null || :
+        cp *.js ../backend-deploy/ 2>/dev/null || :
+        cp .env* ../backend-deploy/ 2>/dev/null || :
+        
+        # Create web.config for Azure Web App
+        echo '<?xml version="1.0" encoding="utf-8"?>
+        <configuration>
+          <system.webServer>
+            <webSocket enabled="false" />
+            <handlers>
+              <add name="iisnode" path="server.js" verb="*" modules="iisnode"/>
+            </handlers>
+            <rewrite>
+              <rules>
+                <rule name="NodeInspector" patternSyntax="ECMAScript" stopProcessing="true">
+                  <match url="^server.js\/debug[\/]?" />
+                </rule>
+                <rule name="StaticContent">
+                  <action type="Rewrite" url="public{REQUEST_URI}"/>
+                </rule>
+                <rule name="DynamicContent">
+                  <conditions>
+                    <add input="%{REQUEST_FILENAME}" matchType="IsFile" negate="True"/>
+                  </conditions>
+                  <action type="Rewrite" url="server.js"/>
+                </rule>
+              </rules>
+            </rewrite>
+            <security>
+              <requestFiltering>
+                <hiddenSegments>
+                  <remove segment="bin"/>
+                </hiddenSegments>
+              </requestFiltering>
+            </security>
+            <httpErrors existingResponse="PassThrough" />
+          </system.webServer>
+        </configuration>' > ../backend-deploy/web.config
+        
+        # Create .env file with production settings
+        echo "NODE_ENV=production" > ../backend-deploy/.env
+        echo "PORT=8080" >> ../backend-deploy/.env
+        echo "MONGODB_URI=${{ secrets.MONGODB_URI }}" >> ../backend-deploy/.env
+        echo "JWT_SECRET=${{ secrets.JWT_SECRET }}" >> ../backend-deploy/.env
+        echo "JWT_EXPIRE=30d" >> ../backend-deploy/.env
+        echo "GOOGLE_AI_API_KEY=${{ secrets.GOOGLE_AI_API_KEY }}" >> ../backend-deploy/.env
+        
+        # Show directory structure for debugging
+        echo "Backend deployment package contents:"
+        ls -la ../backend-deploy/
+    
+    - name: Upload backend package
+      uses: actions/upload-artifact@v4
+      with:
+        name: backend-package
+        path: backend-deploy
+        retention-days: 1
+    
+    - name: Login to Azure
+      uses: azure/login@v2
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+    
+    - name: Deploy Backend to Azure Web App
+      uses: azure/webapps-deploy@v3
+      with:
+        app-name: ${{ secrets.AZURE_BACKEND_APP_NAME }}
+        slot-name: 'production'
+        publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+        package: ./backend-deploy
