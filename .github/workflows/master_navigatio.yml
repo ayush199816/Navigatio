@@ -39,14 +39,17 @@ jobs:
           npm install
         fi
     
-    - name: Build frontend
-      working-directory: ./frontend
+    - name: Build frontend and prepare deployment
+      working-directory: ./
       run: |
-        # Disable CI to prevent build failures from warnings
+        # Build the frontend
+        echo "Building frontend..."
+        cd frontend
         CI=false npm run build
+        cd ..
         
         # Create a test file to verify deployment
-        echo "<!DOCTYPE html><html><body><h1>Test Deployment</h1><p>If you see this, the deployment worked but the React app might have issues.</p></body></html>" > build/test.html
+        echo "<!DOCTYPE html><html><body><h1>Test Deployment</h1><p>If you see this, the deployment worked but the React app might have issues.</p></body></html>" > frontend/build/test.html
         
         # Create a proper web.config for Azure Web Apps
         echo '<?xml version="1.0"?>
@@ -70,19 +73,18 @@ jobs:
               </rules>
             </rewrite>
           </system.webServer>
-        </configuration>' > build/web.config
+        </configuration>' > frontend/build/web.config
         
-        # Debug: List build directory contents
-        echo "Build directory contents:"
-        ls -la build/
+        # Create deployment directory
+        echo "Creating deployment package..."
+        mkdir -p deploy-package
         
-        # Create deployment package
-        mkdir -p deploy-package/site/wwwroot
-        cp -r build/* deploy-package/site/wwwroot/
-        cp build/web.config deploy-package/site/
+        # Copy frontend build to deployment package
+        cp -r frontend/build/* deploy-package/
         
-        echo "Deployment package created"
-        ls -la deploy-package/site/wwwroot
+        # Debug: Show deployment package structure
+        echo "Deployment package contents:"
+        ls -la deploy-package/
     
     - name: Login to Azure
       uses: azure/login@v2
@@ -95,4 +97,4 @@ jobs:
         app-name: ${{ secrets.AZURE_WEBAPP_NAME }}
         slot-name: 'production'
         publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
-        package: deploy-package/site
+        package: ./deploy-package
