@@ -94,7 +94,7 @@ jobs:
     - name: Deploy Frontend to Azure Web App
       uses: azure/webapps-deploy@v3
       with:
-        app-name: ${{ secrets.AZURE_FRONTEND_APP_NAME }}
+        app-name: 'navigatio-frontend'  # Hardcoded for testing
         slot-name: 'production'
         publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
         package: ./deploy-package
@@ -225,7 +225,7 @@ jobs:
     - name: Deploy Backend to Azure Web App
       uses: azure/webapps-deploy@v3
       with:
-        app-name: ${{ secrets.AZURE_BACKEND_APP_NAME }}
+        app-name: 'navigatio-backend'  # Hardcoded for testing
         slot-name: 'production'
         publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
         package: ./backend-deploy
