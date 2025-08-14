@@ -1,38 +1,31 @@
-name: Build and Deploy to Azure
-# Workflow for deploying Navigatio frontend and backend to Azure
-
 on:
   push:
-    branches: [ master ]
+    branches: [ main, master ]
   pull_request:
-    branches: [ master ]
+    branches: [ main, master ]
 
 jobs:
   frontend:
-    name: Build and Deploy Frontend
+    name: Frontend
     runs-on: ubuntu-latest
-    environment: 'production'
-    permissions:
-      id-token: write
-      contents: read
     
     steps:
     - uses: actions/checkout@v4
     
-    - name: Setup Node.js
+    - name: Setup Node.js for frontend
       uses: actions/setup-node@v4
       with:
         node-version: '22.x'
         cache: 'npm'
         cache-dependency-path: frontend/package-lock.json
     
-    - name: Cache node modules
+    - name: Cache frontend node modules
       uses: actions/cache@v4
       with:
         path: frontend/node_modules
-        key: ${{ runner.os }}-node-modules-${{ hashFiles('frontend/package-lock.json') }}
+        key: ${{ runner.os }}-frontend-node-modules-${{ hashFiles('frontend/package-lock.json') }}
     
-    - name: Install dependencies
+    - name: Install frontend dependencies
       working-directory: ./frontend
       run: |
         if [ -f package-lock.json ]; then
@@ -43,88 +36,123 @@ jobs:
           npm install
         fi
     
-    - name: Build frontend and prepare deployment
-      working-directory: ./
+    - name: Run frontend tests if they exist
+      working-directory: ./frontend
       run: |
-        # Build the frontend
-        echo "Building frontend..."
-        cd frontend
+        if [ -d "src/__tests__" ] || ls src/**/*.test.js* 1> /dev/null 2>&1; then
+          npm test -- --watchAll=false
+        else
+          echo "No test files found, skipping tests"
+        fi
+    
+    - name: Build frontend
+      working-directory: ./frontend
+      run: |
+        # Install dependencies
+        npm ci
+        
+        # Build the React app
         CI=false npm run build
-        cd ..
+        
+        # Debug: List all files in build directory
+        echo "Build directory contents:"
+        ls -la build/
+        echo "\nLooking for index.html:"
+        find build/ -name "index.html" -ls || echo "index.html not found!"
         
         # Create a test file to verify deployment
-        echo "<!DOCTYPE html><html><body><h1>Test Deployment</h1><p>If you see this, the deployment worked but the React app might have issues.</p></body></html>" > frontend/build/test.html
-        
-        # Create a proper web.config for Azure Web Apps
-        echo '<?xml version="1.0"?>
-        <configuration>
-          <system.webServer>
-            <staticContent>
-              <mimeMap fileExtension=".json" mimeType="application/json" />
-              <mimeMap fileExtension=".woff" mimeType="application/font-woff" />
-              <mimeMap fileExtension=".woff2" mimeType="application/font-woff" />
-            </staticContent>
-            <rewrite>
-              <rules>
-                <rule name="React Routes" stopProcessing="true">
-                  <match url=".*" />
-                  <conditions logicalGrouping="MatchAll">
-                    <add input="{REQUEST_FILENAME}" matchType="IsFile" negate="true" />
-                    <add input="{REQUEST_FILENAME}" matchType="IsDirectory" negate="true" />
-                  </conditions>
-                  <action type="Rewrite" url="/index.html" />
-                </rule>
-              </rules>
-            </rewrite>
-          </system.webServer>
-        </configuration>' > frontend/build/web.config
-        
+        echo "<!DOCTYPE html><html><body><h1>Test Deployment</h1><p>If you see this, the deployment worked but the React app might have issues.</p></body></html>" > build/test.html
+
+    - name: Create deployment package
+      run: |
         # Create deployment directory
-        echo "Creating deployment package..."
-        mkdir -p deploy-package
+        mkdir -p deployment
         
-        # Copy frontend build to deployment package
-        cp -r frontend/build/* deploy-package/
+        # Copy build files
+        echo "Copying build files to deployment directory..."
+        cp -r frontend/build/* deployment/
         
-        # Debug: Show deployment package structure
+        # Create a minimal web.config for Azure
+        echo '<?xml version="1.0"?><configuration><system.webServer><staticContent><mimeMap fileExtension=".json" mimeType="application/json" /><mimeMap fileExtension=".woff" mimeType="application/font-woff" /><mimeMap fileExtension=".woff2" mimeType="application/font-woff" /></staticContent><rewrite><rules><rule name="React Routes" stopProcessing="true"><match url=".*" /><conditions logicalGrouping="MatchAll"><add input="{REQUEST_FILENAME}" matchType="IsFile" negate="true" /><add input="{REQUEST_FILENAME}" matchType="IsDirectory" negate="true" /></conditions><action type="Rewrite" url="/index.html" /></rule></rules></rewrite></system.webServer></configuration>' > deployment/web.config
+        
+        # Create a test file
+        echo "<!DOCTYPE html><html><body><h1>Test Deployment</h1><p>If you see this, the deployment worked but the React app might have issues.</p></body></html>" > deployment/test.html
+        
+        # Verify deployment package
         echo "Deployment package contents:"
-        ls -la deploy-package/
-        echo "\nContents of deploy-package directory:"
-        find deploy-package -type f | sort
-    
+        ls -la deployment
+        echo "\nLooking for index.html in deployment:"
+        find deployment -name "index.html" -ls || echo "ERROR: index.html not found in deployment package!"
+        
+        # Create a zip of the deployment package for manual inspection
+        zip -r deployment.zip deployment/
+        ls -la deployment.zip
+
+    - name: Upload build output
+      uses: actions/upload-artifact@v4
+      with:
+        name: frontend-build
+        path: deployment/
+        retention-days: 1
+
+  deploy:
+    needs: [frontend, backend]
+    runs-on: ubuntu-latest
+    environment: 'production'
+    steps:
+    - name: Download build output
+      uses: actions/download-artifact@v4
+      with:
+        name: frontend-build
+        path: deployment
+
+    - name: List deployment files (debug)
+      run: ls -R deployment
+      continue-on-error: true
+
     - name: Login to Azure
       uses: azure/login@v2
       with:
         creds: ${{ secrets.AZURE_CREDENTIALS }}
-    
-    - name: Deploy to Azure Web App - Frontend
+
+    - name: Deploy to Azure Web App
       uses: azure/webapps-deploy@v3
       with:
-        app-name: navigatio-frontend
-        package: ./deploy-package
+        app-name: ${{ secrets.AZURE_WEBAPP_NAME }}
+        slot-name: 'production'
         publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
-        resource-group-name: Navigatio_group
+        package: deployment/
+        # Ensure we're deploying to the root of the web app
+        target-path: /home/site/wwwroot
+        # Clean the target directory before deployment
+        clean: true
 
   backend:
-    name: Build and Deploy Backend
-    needs: frontend
+    name: Backend
     runs-on: ubuntu-latest
-    environment: 'production'
-    permissions:
-      id-token: write
-      contents: read
+    
+    services:
+      mongodb:
+        image: mongo:6.0
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --eval 'db.runCommand({ ping: 1 })' localhost:27017/test --quiet"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     
     steps:
     - uses: actions/checkout@v4
     
-    - name: Setup Node.js
+    - name: Setup Node.js for backend
       uses: actions/setup-node@v4
       with:
-        node-version: '20.x'
+        node-version: '22.x'
         cache: 'npm'
         cache-dependency-path: backend/package-lock.json
     
-    - name: Cache node modules
+    - name: Cache backend node modules
       uses: actions/cache@v4
       with:
         path: backend/node_modules
@@ -141,100 +169,25 @@ jobs:
           npm install
         fi
     
-    - name: Run backend tests
+    - name: Set up environment variables
       working-directory: ./backend
+      env:
+        PORT: 5000
+        MONGODB_URI: ${{ secrets.MONGODB_URI || 'mongodb+srv://ayush199816:jpODnVQiVDGs5Xv4@navigatio.9ure2jk.mongodb.net/' }}
+        JWT_SECRET: ${{ secrets.JWT_SECRET || 'your_jwt_secret_key_here' }}
+        JWT_EXPIRE: 30d
+        NODE_ENV: test
+        GOOGLE_AI_API_KEY: ${{ secrets.GOOGLE_AI_API_KEY }}
       run: |
-        if [ -d "test" ] || [ -f "*.test.js" ] || [ -f "*.spec.js" ]; then
-          npm test
-        else
-          echo "No test files found, skipping tests"
-        fi
+        # Create .env file for local testing
+        echo "PORT=$PORT" > .env
+        echo "MONGODB_URI=$MONGODB_URI" >> .env
+        echo "JWT_SECRET=$JWT_SECRET" >> .env
+        echo "JWT_EXPIRE=$JWT_EXPIRE" >> .env
+        echo "NODE_ENV=$NODE_ENV" >> .env
+        echo "GOOGLE_AI_API_KEY=$GOOGLE_AI_API_KEY" >> .env
     
-    - name: Create deployment package
-      working-directory: ./backend
-      run: |
-        # Create deployment directory
-        mkdir -p ../backend-deploy
-        
-        # Copy package files
-        cp package*.json ../backend-deploy/
-        
-        # Install production dependencies
-        npm ci --only=production
-        
-        # Copy source files
-        cp -r src/ ../backend-deploy/src/
-        cp -r config/ ../backend-deploy/config/ 2>/dev/null || :
-        cp -r middleware/ ../backend-deploy/middleware/ 2>/dev/null || :
-        cp -r models/ ../backend-deploy/models/ 2>/dev/null || :
-        cp -r controllers/ ../backend-deploy/controllers/ 2>/dev/null || :
-        cp -r utils/ ../backend-deploy/utils/ 2>/dev/null || :
-        cp *.js ../backend-deploy/ 2>/dev/null || :
-        cp .env* ../backend-deploy/ 2>/dev/null || :
-        
-        # Create web.config for Azure Web App
-        echo '<?xml version="1.0" encoding="utf-8"?>
-        <configuration>
-          <system.webServer>
-            <webSocket enabled="false" />
-            <handlers>
-              <add name="iisnode" path="server.js" verb="*" modules="iisnode"/>
-            </handlers>
-            <rewrite>
-              <rules>
-                <rule name="NodeInspector" patternSyntax="ECMAScript" stopProcessing="true">
-                  <match url="^server.js\/debug[\/]?" />
-                </rule>
-                <rule name="StaticContent">
-                  <action type="Rewrite" url="public{REQUEST_URI}"/>
-                </rule>
-                <rule name="DynamicContent">
-                  <conditions>
-                    <add input="%{REQUEST_FILENAME}" matchType="IsFile" negate="True"/>
-                  </conditions>
-                  <action type="Rewrite" url="server.js"/>
-                </rule>
-              </rules>
-            </rewrite>
-            <security>
-              <requestFiltering>
-                <hiddenSegments>
-                  <remove segment="bin"/>
-                </hiddenSegments>
-              </requestFiltering>
-            </security>
-            <httpErrors existingResponse="PassThrough" />
-          </system.webServer>
-        </configuration>' > ../backend-deploy/web.config
-        
-        # Create .env file with production settings
-        echo "NODE_ENV=production" > ../backend-deploy/.env
-        echo "PORT=8080" >> ../backend-deploy/.env
-        echo "MONGODB_URI=${{ secrets.MONGODB_URI }}" >> ../backend-deploy/.env
-        echo "JWT_SECRET=${{ secrets.JWT_SECRET }}" >> ../backend-deploy/.env
-        echo "JWT_EXPIRE=30d" >> ../backend-deploy/.env
-        echo "GOOGLE_AI_API_KEY=${{ secrets.GOOGLE_AI_API_KEY }}" >> ../backend-deploy/.env
-        
-        # Show directory structure for debugging
-        echo "Backend deployment package contents:"
-        ls -la ../backend-deploy/
-    
-    - name: Upload backend package
-      uses: actions/upload-artifact@v4
-      with:
-        name: backend-package
-        path: backend-deploy
-        retention-days: 1
-    
-    - name: Login to Azure
-      uses: azure/login@v2
-      with:
-        creds: ${{ secrets.AZURE_CREDENTIALS }}
-    
-    - name: Deploy to Azure Web App - Backend
-      uses: azure/webapps-deploy@v3
-      with:
-        app-name: navigatio-backend
-        package: ./backend-deploy
-        publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
-        resource-group-name: Navigatio_group
+    # Uncomment when you have backend tests
+    # - name: Run backend tests
+    #   working-directory: ./backend
+    #   run: npm test
