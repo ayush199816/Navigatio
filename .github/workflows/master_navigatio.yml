@@ -98,14 +98,12 @@ jobs:
         subscription-id: 0b39938f-1439-4596-9e1c-f82b58ebd47e
         enable-AzPSSession: true
     
-    - name: Deploy Frontend to Azure Web App
+    - name: Deploy to Azure Web App - Frontend
       uses: azure/webapps-deploy@v3
       with:
-        app-name: 'navigatio-frontend'
-        slot-name: 'production'
-        publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+        app-name: navigatio-frontend
         package: ./deploy-package
-        runtime: 'NODE:20-lts'
+        publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
 
   backend:
     name: Build and Deploy Backend
@@ -236,11 +234,9 @@ jobs:
         subscription-id: 0b39938f-1439-4596-9e1c-f82b58ebd47e
         enable-AzPSSession: true
     
-    - name: Deploy Backend to Azure Web App
+    - name: Deploy to Azure Web App - Backend
       uses: azure/webapps-deploy@v3
       with:
-        app-name: 'navigatio-backend'
-        slot-name: 'production'
-        publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+        app-name: navigatio-backend
         package: ./backend-deploy
-        runtime: 'NODE:20-lts'
+        publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
