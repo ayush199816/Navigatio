@@ -72,40 +72,62 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v4
+    - name: Setup Node.js for backend
+      uses: actions/setup-node@v4
       with:
-        dotnet-version: '8.0.x'
+        node-version: '20.x'
+        cache: 'npm'
+        cache-dependency-path: backend/package-lock.json
     
-    - name: Cache .NET dependencies
+    - name: Cache backend node modules
       uses: actions/cache@v4
       with:
-        path: |
-          ~/.nuget/packages
-          **/bin
-          **/obj
-        key: ${{ runner.os }}-dotnet-${{ hashFiles('**/*.csproj') }}
-        restore-keys: |
-          ${{ runner.os }}-dotnet-
+        path: backend/node_modules
+        key: ${{ runner.os }}-backend-node-modules-${{ hashFiles('backend/package-lock.json') }}
     
-    - name: Install dependencies
-      working-directory: ./backend
-      run: dotnet restore
-    
-    - name: Run tests
-      working-directory: ./backend
-      run: dotnet test --no-restore --verbosity normal
-    
-    - name: Publish
+    - name: Install backend dependencies
       working-directory: ./backend
       run: |
-        dotnet publish -c Release -o ${{ github.workspace }}/publish
-      
-    - name: Upload artifact for deployment
+        if [ -f package-lock.json ]; then
+          npm ci
+        elif [ -f yarn.lock ]; then
+          yarn install --frozen-lockfile
+        else
+          npm install
+        fi
+    
+    - name: Run backend tests if they exist
+      working-directory: ./backend
+      run: |
+        if [ -d "test" ] || [ -d "__tests__" ] || [ -f "*.test.js" ] || [ -f "*.spec.js" ]; then
+          npm test
+        else
+          echo "No test files found, skipping tests"
+        fi
+    
+    - name: Build backend (if needed)
+      working-directory: ./backend
+      run: |
+        if [ -f "package.json" ] && grep -q "build" package.json; then
+          npm run build
+        else
+          echo "No build script found in package.json, skipping build"
+        fi
+    
+    - name: Create deployment package
+      working-directory: ./backend
+      run: |
+        mkdir -p ../backend-deploy
+        # Copy only the necessary files for production
+        cp -r node_modules package*.json .env* ../backend-deploy/ 2>/dev/null || :
+        cp -r src dist build public ../backend-deploy/ 2>/dev/null || :
+        cp *.js *.json ../backend-deploy/ 2>/dev/null || :
+    
+    - name: Upload backend package
       uses: actions/upload-artifact@v4
       with:
         name: backend
-        path: ${{ github.workspace }}/publish
+        path: backend-deploy
         retention-days: 1
 
   deploy:
