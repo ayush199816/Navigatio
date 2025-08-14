@@ -90,12 +90,18 @@ jobs:
         echo "Deployment package contents:"
         ls -la deploy-package/
     
+    - name: Login to Azure
+      uses: azure/login@v2
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+    
     - name: Deploy to Azure Web App - Frontend
       uses: azure/webapps-deploy@v3
       with:
         app-name: navigatio-frontend
         package: ./deploy-package
         publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+        resource-group: Navigatio_group
 
   backend:
     name: Build and Deploy Backend
@@ -218,9 +224,15 @@ jobs:
         path: backend-deploy
         retention-days: 1
     
+    - name: Login to Azure
+      uses: azure/login@v2
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+    
     - name: Deploy to Azure Web App - Backend
       uses: azure/webapps-deploy@v3
       with:
         app-name: navigatio-backend
         package: ./backend-deploy
         publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+        resource-group: Navigatio_group
