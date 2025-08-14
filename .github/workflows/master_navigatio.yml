@@ -11,9 +11,6 @@ jobs:
     name: Build and Deploy Frontend
     runs-on: ubuntu-latest
     environment: 'production'
-    name: Build and Deploy
-    runs-on: ubuntu-latest
-    environment: 'production'
     
     steps:
     - uses: actions/checkout@v4
